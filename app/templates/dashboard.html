@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Panel de Control - SaaS B2B{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900">Bandeja de Atención Automatizada</h1>
+            <p class="text-sm text-gray-500">Supervisa y aprueba las respuestas sugeridas por la Inteligencia Artificial.</p>
+        </div>
+    </div>
+
+    <div hx-get="/dashboard/stats" hx-trigger="load, every 5s" hx-swap="innerHTML">
+        <div class="animate-pulse bg-gray-200 h-24 rounded-lg"></div>
+    </div>
+
+    <div class="bg-white shadow rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+            <h2 class="font-semibold text-gray-700">Correos Recientes e Historial</h2>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                Live Sync Activo
+            </span>
+        </div>
+
+        <div hx-get="/dashboard/emails" hx-trigger="load, every 5s" hx-swap="innerHTML" class="divide-y divide-gray-200">
+            <div class="p-6 text-center text-gray-500">Cargando flujos de correo...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

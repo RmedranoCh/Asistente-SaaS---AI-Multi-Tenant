@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ settings.PROJECT_NAME }}{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/dist.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/sse.js"></script>
+</head>
+<body class="bg-gray-50 font-sans text-gray-900 antialiased">
+    <div id="alert-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <div class="min-h-screen flex flex-col">
+        <nav class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-xl font-bold text-indigo-600">Asistente SaaS AI</span>
+                <span class="text-xs text-gray-400 hidden sm:inline">v{{ settings.VERSION }}</span>
+            </div>
+            <div class="flex items-center space-x-6">
+                <a href="/dashboard" class="text-sm font-medium text-gray-600 hover:text-indigo-600">Panel</a>
+                <a href="/settings" class="text-sm font-medium text-gray-600 hover:text-indigo-600">Configuración</a>
+                <a href="/login" class="text-sm font-medium text-gray-500 hover:text-red-600">Salir</a>
+            </div>
+        </nav>
+
+        <main class="flex-1 p-6 max-w-7xl w-full mx-auto">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script>
+        document.body.addEventListener('htmx:afterRequest', (evt) => {
+            if (evt.detail.successful) {
+                setTimeout(() => {
+                    const container = document.getElementById('alert-container');
+                    if (container) container.innerHTML = '';
+                }, 4500);
+            }
+        });
+    </script>
+</body>
+</html>

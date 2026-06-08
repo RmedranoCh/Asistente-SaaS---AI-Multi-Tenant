@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración de Inquilino{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold tracking-tight text-gray-900">Configuración del Sistema</h1>
+        <p class="text-sm text-gray-500">Vincula tus canales corporativos e inyecta conocimiento a la Inteligencia Artificial.</p>
+    </div>
+
+    <div class="bg-white shadow rounded-xl border border-gray-200 p-6 space-y-4">
+        <h3 class="text-lg font-semibold text-gray-800">1. Canal de Comunicación</h3>
+        <p class="text-xs text-gray-500">
+            Otorga permisos mediante Google OAuth2 seguro para que la IA lea y responda tu correo de soporte.
+        </p>
+
+        {% if google_connected %}
+            <div class="flex items-center justify-between bg-green-50 border border-green-200 p-3 rounded-lg">
+                <div>
+                    <p class="text-sm font-medium text-green-800">Conectado como {{ google_email }}</p>
+                    <p class="text-xs text-green-600">El worker puede leer y enviar correos en tu nombre.</p>
+                </div>
+                <a href="/settings/disconnect"
+                   hx-confirm="¿Desconectar la cuenta?"
+                   class="text-xs font-semibold text-red-600 hover:underline">Desconectar</a>
+            </div>
+        {% else %}
+            <button
+                type="button"
+                onclick="initGoogleIdentityServices()"
+                class="inline-flex items-center px-4 py-2 bg-black hover:bg-gray-900 text-white text-sm font-medium rounded-lg transition shadow">
+                Conectar Cuenta de Gmail
+            </button>
+        {% endif %}
+    </div>
+
+    <div class="bg-white shadow rounded-xl border border-gray-200 p-6 space-y-4">
+        <h3 class="text-lg font-semibold text-gray-800">2. Base de Conocimiento (RAG Local)</h3>
+        <p class="text-xs text-gray-500">
+            Sube tus políticas, catálogos o preguntas frecuentes. El sistema las vectorizará localmente con BGE-small.
+        </p>
+        <p class="text-xs text-gray-400">Documentos cargados: <strong>{{ docs_count }}</strong></p>
+
+        <form
+            hx-post="/settings/knowledge/upload"
+            hx-encoding="multipart/form-data"
+            hx-swap="none"
+            class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-indigo-500 transition">
+            <span class="text-xs text-gray-500 block mb-2">
+                Arrastra tus archivos aquí (.txt, .md, .pdf)
+            </span>
+            <input type="file" name="file" required class="text-xs">
+            <button
+                type="submit"
+                class="mt-3 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium">
+                Subir y Vectorizar
+            </button>
+        </form>
+    </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+    const CLIENT_ID = "{{ settings.GOOGLE_CLIENT_ID }}";
+
+    function initGoogleIdentityServices() {
+        if (typeof google === 'undefined' || !google.accounts) {
+            alert('La librería de Google aún no se cargó. Espera un momento y reintenta.');
+            return;
+        }
+        const client = google.accounts.oauth2.initCodeClient({
+            client_id: CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.events',
+            ux_mode: 'popup',
+            callback: (response) => {
+                if (!response.code) {
+                    alert('No se recibió un código de autorización.');
+                    return;
+                }
+                fetch('/api/v1/oauth/connect-gmail', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: response.code })
+                })
+                .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)))
+                .then(data => {
+                    alert('Cuenta vinculada: ' + (data.email_address || 'OK'));
+                    window.location.reload();
+                })
+                .catch(err => alert('Error al vincular: ' + (err.detail || JSON.stringify(err))));
+            },
+        });
+        client.requestCode();
+    }
+</script>
+{% endblock %}

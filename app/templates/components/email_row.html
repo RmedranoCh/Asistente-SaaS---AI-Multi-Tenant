@@ -1,0 +1,69 @@
+{% if not emails %}
+<div class="p-6 text-center text-gray-500">No hay correos en procesamiento en este momento.</div>
+{% endif %}
+
+{% for email in emails %}
+<div id="email-row-{{ email.id }}" class="p-6 hover:bg-gray-50 transition flex flex-col md:flex-row md:items-start md:justify-between space-y-4 md:space-y-0">
+    <div class="space-y-1 flex-1 pr-4">
+        <div class="flex items-center flex-wrap gap-2">
+            <span class="font-semibold text-gray-900 text-sm">{{ email.sender }}</span>
+            <span class="text-xs text-gray-400">• {{ email.received_at.strftime('%H:%M') if email.received_at else '—' }}</span>
+
+            {% if email.detected_intent == 'Duda' %}
+                <span class="px-2 py-0.5 text-xs rounded-md bg-blue-100 text-blue-800">Duda (RAG)</span>
+            {% elif email.detected_intent == 'Cita' %}
+                <span class="px-2 py-0.5 text-xs rounded-md bg-purple-100 text-purple-800">Cita</span>
+            {% elif email.detected_intent == 'Reembolso' %}
+                <span class="px-2 py-0.5 text-xs rounded-md bg-red-100 text-red-800">Reembolso - Escalar</span>
+            {% elif email.detected_intent == 'Queja' %}
+                <span class="px-2 py-0.5 text-xs rounded-md bg-orange-100 text-orange-800">Queja Crítica</span>
+            {% else %}
+                <span class="px-2 py-0.5 text-xs rounded-md bg-gray-100 text-gray-800">{{ email.detected_intent or 'Procesando' }}</span>
+            {% endif %}
+        </div>
+        <h4 class="text-sm font-medium text-gray-700">{{ email.subject }}</h4>
+        <p class="text-xs text-gray-500 line-clamp-2 italic">"{{ email.body_content }}"</p>
+
+        <form
+            hx-post="/dashboard/emails/{{ email.id }}/approve"
+            hx-swap="none"
+            class="mt-3 space-y-2">
+            <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-xs text-indigo-950">
+                <span class="font-bold text-indigo-700 block mb-1">Respuesta sugerida por Gemini:</span>
+                <textarea
+                    name="final_reply"
+                    rows="3"
+                    class="w-full text-sm p-2 rounded border border-indigo-200 focus:ring-2 focus:ring-indigo-400 focus:outline-none"
+                    placeholder="La IA aún no ha sugerido una respuesta...">{{ email.suggested_reply or '' }}</textarea>
+            </div>
+            {% if email.status == 'PENDING_APPROVAL' %}
+                <div class="flex items-center gap-2">
+                    <button
+                        type="submit"
+                        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-medium shadow transition">
+                        Aprobar y Enviar
+                    </button>
+                    <button
+                        type="button"
+                        hx-post="/dashboard/emails/{{ email.id }}/reject"
+                        hx-confirm="¿Descartar este correo?"
+                        hx-swap="none"
+                        class="px-3 py-1.5 bg-gray-100 hover:bg-red-100 text-gray-700 hover:text-red-700 rounded-md text-xs font-medium transition">
+                        Descartar
+                    </button>
+                </div>
+            {% elif email.status == 'AUTO_SENT' %}
+                <span class="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">Enviado automáticamente</span>
+            {% elif email.status == 'MANUALLY_APPROVED' %}
+                <span class="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">Enviado por humano</span>
+            {% elif email.status == 'APPROVING' %}
+                <span class="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">Encolado para envío...</span>
+            {% elif email.status == 'REJECTED' %}
+                <span class="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-800">Descartado</span>
+            {% else %}
+                <span class="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-800">{{ email.status }}</span>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endfor %}

@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: ankane/pgvector:v0.5.1
+    container_name: asistente_saas_postgres
+    environment:
+      POSTGRES_USER: saas_admin
+      POSTGRES_PASSWORD: super_secret_password_2026
+      POSTGRES_DB: asistente_saas_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saas_admin -d asistente_saas_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis_broker:
+    image: redis:7.2-alpine
+    container_name: asistente_saas_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web_api:
+    build: .
+    container_name: asistente_saas_web
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://saas_admin:super_secret_password_2026@postgres_db:5432/asistente_saas_db
+      - REDIS_URL=redis://redis_broker:6379/0
+      - ENCRYPTION_KEY=3jV2mSdf9X3kLmP_qRtWvXyZ1aBsCdEfGhiJkLmNoPq=
+      - JWT_SECRET_KEY=cambiame_por_algo_seguro_en_produccion_12345
+      - GOOGLE_CLIENT_ID=mock_client_id
+      - GOOGLE_CLIENT_SECRET=mock_client_secret
+      - GOOGLE_PUBSUB_VERIFICATION_TOKEN=token_secreto_pubsub_xyz
+      - GEMINI_API_KEY=mock_gemini_key
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      redis_broker:
+        condition: service_healthy
+
+  celery_worker:
+    build: .
+    container_name: asistente_saas_worker
+    command: celery -A app.workers.worker.celery_app worker --loglevel=info -c 2
+    volumes:
+      - .:/code
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://saas_admin:super_secret_password_2026@postgres_db:5432/asistente_saas_db
+      - REDIS_URL=redis://redis_broker:6379/0
+      - ENCRYPTION_KEY=3jV2mSdf9X3kLmP_qRtWvXyZ1aBsCdEfGhiJkLmNoPq=
+      - JWT_SECRET_KEY=cambiame_por_algo_seguro_en_produccion_12345
+      - GOOGLE_CLIENT_ID=mock_client_id
+      - GOOGLE_CLIENT_SECRET=mock_client_secret
+      - GOOGLE_PUBSUB_VERIFICATION_TOKEN=token_secreto_pubsub_xyz
+      - GEMINI_API_KEY=mock_gemini_key
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      redis_broker:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
