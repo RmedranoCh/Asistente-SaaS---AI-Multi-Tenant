@@ -271,6 +271,24 @@ El sistema maneja estas entidades principales:
 
 ---
 
+## Tests
+
+El proyecto usa `pytest`. Los tests están pensados para correr **sin Docker ni credenciales**: usan una base de datos SQLite en memoria y simulan Gemini y los servicios de Google, así que puedes ejecutarlos en tu máquina de forma directa.
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Se cubren dos niveles:
+
+- **Unitarios**: cifrado de tokens, parseo de correos de Gmail, validación de la configuración y los nodos del grafo del agente (clasificar, buscar en RAG, redactar y ejecutar acciones) con la IA simulada.
+- **De integración**: los endpoints de la API (mock/testing, webhook de Pub/Sub y subida de conocimientos) contra una base SQLite.
+
+> En `.github/workflows/ci.yml` hay un pipeline que instala lo necesario y ejecuta `pytest` en cada push o pull request.
+
+---
+
 ## Licencia
 
 Proyecto de código abierto. Consulta el archivo de licencia en el repositorio para más detalles.
@@ -549,6 +567,24 @@ The system manages these main entities:
 - **Token encryption**: Google access tokens are encrypted with Fernet (AES-256) before being stored in the database. The encryption key is configured via `ENCRYPTION_KEY`.
 - **Multi-tenancy**: Each company can only see and access its own data. RAG queries filter by `company_id`.
 - **Webhook validation**: The Pub/Sub webhook verifies a secret token before processing the notification.
+
+---
+
+## Tests
+
+The project uses `pytest`. The test suite is designed to run **without Docker or any credentials**: it uses an in-memory SQLite database and fakes Gemini and the Google services, so you can run it directly on your machine.
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Two levels are covered:
+
+- **Unit tests**: token encryption, Gmail message parsing, config validation, and the agent graph nodes (classify, RAG lookup, draft, and execute actions) with the AI mocked out.
+- **Integration tests**: the REST API endpoints (mock/testing data, Pub/Sub webhook, and knowledge upload) against a SQLite database.
+
+> There's a pipeline in `.github/workflows/ci.yml` that installs the dependencies and runs `pytest` on every push or pull request.
 
 ---
 

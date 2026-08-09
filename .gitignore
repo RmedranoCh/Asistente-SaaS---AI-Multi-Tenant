@@ -7,6 +7,9 @@ build/
 *.egg
 .venv/
 venv/
+.coverage
+htmlcov/
+.pytest_cache/
 
 # Environment
 .env

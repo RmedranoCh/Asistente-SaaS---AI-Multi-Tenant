@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Any
+
 from sqlalchemy import select
-from app.db.session import async_session_maker
+
 from app.db.models import MockInboxEmail, MockSentEmail
+from app.db.session import async_session_maker
 
 
 class MockGmailActionsTool:
@@ -29,7 +30,7 @@ class MockGmailActionsTool:
         self,
         message_id: str,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         async with async_session_maker() as db:
             result = await db.execute(
                 select(MockInboxEmail).where(
@@ -64,12 +65,13 @@ class MockGmailActionsTool:
         subject: str,
         body_text: str,
         encrypted_refresh_token: str = "",
+        company_id: str | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         mock_id = str(uuid.uuid4())
         async with async_session_maker() as db:
             sent = MockSentEmail(
-                company_id=uuid.uuid(),  # se sobreescribe abajo si hay contexto
+                company_id=company_id or None,
                 original_message_id=original_message_id,
                 thread_id=thread_id,
                 to_email=to_email,

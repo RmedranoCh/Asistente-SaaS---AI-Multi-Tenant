@@ -1,11 +1,12 @@
-from langgraph.graph import StateGraph, END
-from app.core.agents.states import EmailAgentState
+from langgraph.graph import END, StateGraph
+
 from app.core.agents.nodes import (
     node_classify_email,
-    node_enrich_rag,
     node_decision_and_draft,
+    node_enrich_rag,
     node_execute_actions,
 )
+from app.core.agents.states import EmailAgentState
 
 
 def routing_workflow(state: EmailAgentState) -> str:
@@ -14,26 +15,40 @@ def routing_workflow(state: EmailAgentState) -> str:
     return "go_to_draft"
 
 
-workflow = StateGraph(EmailAgentState)
+def build_email_cognitive_graph(
+    node_classify=node_classify_email,
+    node_enrich=node_enrich_rag,
+    node_draft=node_decision_and_draft,
+    node_execute=node_execute_actions,
+):
+    """Construye el grafo cognitivo del agente.
 
-workflow.add_node("classify", node_classify_email)
-workflow.add_node("rag_enrich", node_enrich_rag)
-workflow.add_node("decision_draft", node_decision_and_draft)
-workflow.add_node("execute_actions", node_execute_actions)
+    Acepta implementaciones de nodos como parámetros para facilitar la
+    inyección de dependencias en pruebas sin llamar a Gemini ni a RAG.
+    """
+    workflow = StateGraph(EmailAgentState)
 
-workflow.set_entry_point("classify")
+    workflow.add_node("classify", node_classify)
+    workflow.add_node("rag_enrich", node_enrich)
+    workflow.add_node("decision_draft", node_draft)
+    workflow.add_node("execute_actions", node_execute)
 
-workflow.add_conditional_edges(
-    "classify",
-    routing_workflow,
-    {
-        "go_to_rag": "rag_enrich",
-        "go_to_draft": "decision_draft",
-    },
-)
+    workflow.set_entry_point("classify")
 
-workflow.add_edge("rag_enrich", "decision_draft")
-workflow.add_edge("decision_draft", "execute_actions")
-workflow.add_edge("execute_actions", END)
+    workflow.add_conditional_edges(
+        "classify",
+        routing_workflow,
+        {
+            "go_to_rag": "rag_enrich",
+            "go_to_draft": "decision_draft",
+        },
+    )
 
-email_cognitive_graph = workflow.compile()
+    workflow.add_edge("rag_enrich", "decision_draft")
+    workflow.add_edge("decision_draft", "execute_actions")
+    workflow.add_edge("execute_actions", END)
+
+    return workflow.compile()
+
+
+email_cognitive_graph = build_email_cognitive_graph()

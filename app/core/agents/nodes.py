@@ -1,11 +1,9 @@
 import json
 import re
 import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
-from google import genai
-from google.genai import types
 from sqlalchemy import select
 
 from app.config import settings
@@ -15,10 +13,54 @@ from app.core.tools import calendar_tool, crm_tool
 from app.db.models import GoogleCredential
 from app.db.session import async_session_maker
 
-ai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+_ai_client = None
 
 
-def _safe_json(text: str) -> Dict[str, Any]:
+def get_ai_client():
+    """Devuelve el cliente de Gemini, creándolo de forma diferida.
+
+    Se evita inicializar el SDK en el import del módulo para que las pruebas
+    puedan importar sin API key y sin dependencias pesadas.
+    """
+    global _ai_client
+    if _ai_client is None:
+        from google import genai
+
+        _ai_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return _ai_client
+
+
+DEFAULT_MODEL = "gemini-2.5-flash"
+
+
+def _ai_generate(
+    prompt: str,
+    *,
+    json_mode: bool = False,
+    system_instruction: str | None = None,
+    temperature: float = 0.0,
+) -> str | None:
+    """Genera contenido con Gemini. Devuelve None si la llamada falla."""
+    from google.genai import types
+
+    config_kwargs: dict[str, Any] = {"temperature": temperature}
+    if json_mode:
+        config_kwargs["response_mime_type"] = "application/json"
+    if system_instruction:
+        config_kwargs["system_instruction"] = system_instruction
+
+    try:
+        response = get_ai_client().models.generate_content(
+            model=DEFAULT_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(**config_kwargs),
+        )
+        return response.text
+    except Exception:
+        return None
+
+
+def _safe_json(text: str) -> dict[str, Any]:
     text = (text or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?", "", text).strip()
@@ -44,15 +86,7 @@ def node_classify_email(state: EmailAgentState) -> EmailAgentState:
     """
 
     try:
-        response = ai_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.0,
-            ),
-        )
-        data = _safe_json(response.text)
+        data = _safe_json(_ai_generate(prompt, json_mode=True, temperature=0.0))
         intent = data.get("intent", "Queja")
         if intent not in ("Duda", "Cita", "Reembolso", "Queja"):
             intent = "Queja"
@@ -102,23 +136,21 @@ def node_decision_and_draft(state: EmailAgentState) -> EmailAgentState:
     Escribe directamente el cuerpo del correo listo para ser enviado, manteniendo un tono corporativo excelente.
     """
 
-    try:
-        response = ai_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.3,
-            ),
-        )
-        state["suggested_reply"] = (response.text or "").strip()
-    except Exception as e:
+    reply_text = _ai_generate(
+        prompt,
+        json_mode=False,
+        system_instruction=system_instruction,
+        temperature=0.3,
+    )
+    if reply_text:
+        state["suggested_reply"] = reply_text.strip()
+    else:
         state["suggested_reply"] = (
             "Lo sentimos, estamos procesando su solicitud internamente y "
             "nos comunicaremos a la brevedad."
         )
         state["requires_approval"] = True
-        state["tool_error"] = f"draft_error: {str(e)[:200]}"
+        state["tool_error"] = "draft_error: no se pudo generar el borrador con Gemini"
 
     return state
 
@@ -130,7 +162,7 @@ def _extract_email_address(sender: str) -> str:
     return (sender or "").strip()
 
 
-async def _extract_meeting_details(state: EmailAgentState) -> Optional[Dict[str, Any]]:
+async def _extract_meeting_details(state: EmailAgentState) -> dict[str, Any] | None:
     prompt = f"""
     Analiza el siguiente correo y determina si el cliente propone una reunión.
     Si la hay, devuelve un JSON con:
@@ -148,18 +180,7 @@ async def _extract_meeting_details(state: EmailAgentState) -> Optional[Dict[str,
     Cuerpo: {state.get('body', '')}
     """
 
-    try:
-        response = ai_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.0,
-            ),
-        )
-        data = _safe_json(response.text)
-    except Exception:
-        return None
+    data = _safe_json(_ai_generate(prompt, json_mode=True, temperature=0.0))
 
     if not data or data.get("meeting") is None or not data.get("start_iso"):
         return None
@@ -179,7 +200,7 @@ async def _extract_meeting_details(state: EmailAgentState) -> Optional[Dict[str,
     return data
 
 
-async def _get_company_credentials(company_id_str: str) -> Optional[GoogleCredential]:
+async def _get_company_credentials(company_id_str: str) -> GoogleCredential | None:
     try:
         cid = uuid.UUID(company_id_str)
     except Exception:
@@ -192,7 +213,7 @@ async def _get_company_credentials(company_id_str: str) -> Optional[GoogleCreden
 
 
 async def node_execute_actions(state: EmailAgentState) -> EmailAgentState:
-    actions: List[Dict[str, Any]] = list(state.get("actions_taken") or [])
+    actions: list[dict[str, Any]] = list(state.get("actions_taken") or [])
 
     if state.get("intent") != "Cita":
         state["actions_taken"] = actions
